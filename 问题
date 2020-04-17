@@ -1,4 +1,81 @@
 1.死锁的情况，由什么引发的
+死锁：
+定义：通常指两个线程的T1和T2都卡住了，并等待对方完成某些操作。T1不能完成是因为它在等待T2完成，但T2也不能完成，因为他在等待T1完成，于是都完不成就导致了死锁。
+产生死锁的代码示例：
+- (void)viewDidLoad {
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    NSLog(@"DeathLock");
+  });
+}
+由于队列引起的循环等待。
+在主队列提交了viewDidLoad任务，之后又提交了一个block任务，我们在主线程中先去处理viewDidLoad任务，我们的viewDidLoad任务，里面需要等block任务同步执行完毕，才可以向下走，所以viewDidLoad依赖于后面提交的block，而我们block是在主队列中执行的，要依赖于队列的先进先出性质，block就要等待viewDidLoad执行完毕才可以，因为他也是在主队列上面执行的，是先被加到主队列里面的，这样就产生了相互等待，产生了死锁
+- (void)viewDidLoad {
+  dispatch_queue_t queue = dispatch_queue_create("com.rongcloud.sunchenxiu", NULL);
+  dispatch_sync(queue, ^{
+    NSLog(@"not DeathLock");
+  });
+}
+以上不会产生死锁，不在同线程
+- (void)viewDidLoad {
+  _queue = dispatch_queue_create("com.rongcloud.sunchenxiu", NULL);
+  dispatch_sync(_queue, ^{
+    dispatch_sync(_queue, ^{
+      NSLog(@"DeathLock");
+    });
+  });
+}
+会产生死锁，因为两个同步任务都分配到一个同步队列当中，都需要互相等待对方完成。
+
+GCD：
+1.队列：
+DISPATCH_QUEUE_SERIAL 串行队列： 等待正在执行中的处理结束，再执行下一条处理。
+DISPATCH_QUEUE_CONCURRENT 并发队列： 不等待现在执行中的处理是否结束，继续执行下面的处理。只有在异步执行中，才能体现并发性
+创建串行队列：
+dispatch_queue_t serialQueue = dispatch_queue_create("name", NULL)
+or
+dispatch_queue_t serivalQueue = dispatch_queue_create("name", DISPATCH_QUEUE_SERIAL)
+创建并发队列：
+dispatch_queue_t concurrentQueue = dispatch_queue_create("name", DISPATCH_QUEUE_CONCURRENT)
+
+2.任务
+同步执行，不开启新的线程
+dispatch_sync(queue, ^{ ... });
+异步执行，开启新的线程
+dispatch_async(queue, ^{ ... });
+
+区别：
+同步队列是把一个任务添加到队列后立马就执行；
+而并发队列不会
+
+串行队列+同步执行：
+因为是同步执行，所以不创建新的线程，在主线程执行。
+因为是串行队列，所以队列的任务一个接一个地执行。
+任务一加入队列就立马执行
+
+串行队列+异步执行：
+因为是异步执行，所以创建了新的线程。
+因为是串行队列，所以队列中的任务一个接一个执行。
+任务不是添加到队列之后立马执行，而是当所有任务添加到队列之后再执行
+
+并发队列+同步执行：
+同步执行，不创建新的线程，在主线程中执行。
+虽然是并发队列，但是因为是同步执行，没有体现出并发性，任务还是一个接一个执行。
+任务一加入队列就立马执行
+
+并发队列+异步执行：
+异步执行，所以创建了新的线程。
+因为并发队列，异步执行时体现并发性，任务之间交替着同时执行。
+任务不是添加到队列之后立马执行，而是当所有任务添加到队列之后再执行。
+
+主队列+同步执行：
+主队列是主线程的一条队列。
+发生死锁
+
+主队列+异步执行：
+虽然是异步执行，可以开启新的线程，但因为是主队列，他只会在主线程中执行。
+主队列是特殊的串行队列，所以队列的任务一个接一个地执行。
+任务不是添加到队列之后立马执行，而是当所有任务添加到队列之后再执行。
+
 2.下载几张图片后再合成一张用什么
 3.A按钮遮住B按钮，如何点击A按钮让B按钮也响应
 4.调试过程中如何改变变量值
