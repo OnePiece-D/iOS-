@@ -1,2 +1,90 @@
 
 2.下载几张图片后再合成一张用什么
+
+合成图片并显示：
+[self DownLoadImage: ^(UIImage *imag1, UIImage *image2, UIImage *image3) {
+  UIGraphicsBeginImageContentWithOptions(CGSizeMake(375, 450), NO, 0.0);
+  [image1 drawInRect: CGRectMake(0,0,375,150)];
+  [image2 drawInRect: CGRectMake(0,150,375,150)];
+  [image3 drawInRect: CGRectMake(0,300,375,150)];
+  self.downImageV.image = UIGraphicsGetImageFromCurrentImageContext();
+  UIGraphocsEndImageContent;
+}];
+
+开启任务队列(或者使用semaphore)：
+- (void)DownLoadImage:(void(^)(UIImage *image1, UIImage *image2, UIImage *image3))downLoadSuccess
+{
+  __weak typeof(self) weakSelf = self;
+  dispatch_group_t group = dispatch_group_create();
+  dispatch_queue_t queue = dispatch_queue_create("downloadImage", DISPATCH_QUEUE_CONCURRENT);
+  
+  dispatch_group_enter(group);
+  __block UIImage *image1 = nil;
+  dispatch_group_async(group, queue, ^{
+    NSLog(@"donwload 1 image");
+    image1 = [weakSelf imageWithUrl:@""];
+    dispatch_group_leave(group);
+  });
+  
+  dispatch_group_enter(group);
+  __block UIImage *image2 = nil;
+  dispatch_group_async(group, queue, ^{
+    NSLog(@"donwload 2 image");
+    image2 = [weakSelf imageWithUrl:@""];
+    dispatch_group_leave(group);
+  });
+  
+  dispatch_group_enter(group);
+  __block UIImage *image3 = nil;
+  dispatch_group_async(group, queue, ^{
+    NSLog(@"donwload 3 image");
+    image3 = [weakSelf imageWithUrl:@""];
+    dispatch_group_leave(group);
+  });
+  
+  //分组任务完成后通知block执行
+  dispatch_group_notify(group, queue, ^{
+    disapth_async(dispatch_get_main_queue(),^{
+      downLoadSuccess(image1, image2, image3);
+    });
+  });
+}
+
+
+---------分割线----------
+dispatch_semaphore_create(M)：创建一个值为M的信号量
+dispatch_semaphore_wait：如果该信号量的值大于0.则使其信号量的值-1，阻塞线程直到该信号量的值大于0或者达到等待时间。
+dispatch_semaphore_signal：释放信号量，使得该信号量的值加1
+
+使用场景：
+限制线程的最大并发数
+dispatch_semaphore_t sema = dispatch_semaphore_create(M);
+for (NSInter i = 0; i < N; i++) {
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    dispatch_seamphore_wait(sema, DISPATCH_TIME_FOREVER);
+    //do soming
+    ...
+    dispatch_semaphore_signal(sema);
+  }
+}
+
+上述代码总共执行N个任务，但是由于我们设置了值为M的信号量，每一次执行任务的时候都会导致信号量的减1，而在任务结束后使
+信号量加1，当信号量减到0的时候，说明值在执行的任务有M个，这个时候其他任务就会阻塞，直到有任务被完成时，这些任务才会
+执行。
+
+阻塞发送请求的线程：
+有些时候我们需要阻塞发送请求的线程，比如在多个请求回调后统一操作的需求，而这些请求
+之间并没有顺序关系，而这些借口都会另开线程进行网络请求。一般地，这种多线程完成后进
+行统一操作的需求都会使用队列组（dispatch_group_t）来完成，但是由于异步请求，没
+等其他异步回调之后，请求的线程就结束了，为此，就需要使用信号量来阻塞发请求的线程。
+dispatch_async(queue,0), ^{
+  dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+  [网络请求: ^{
+    dispatch_semaphore_signal(sema);
+  }];
+  dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+}
+这样，请求的线程就可以等到回调结束后再结束了，再配合队列组就能完成上述的需求。
+这种技巧可用于以下场景：
+多个请求结束后统一操作
+多个请求顺序执行
