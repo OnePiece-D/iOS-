@@ -1,0 +1,19 @@
+3.A按钮遮住B按钮，如何点击A按钮让B按钮也响应
+重写按钮里的hitTest响应（该回调方法可能会出现多次回调，所以需要去重发送响应）：
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *view = [super hitTest:point withEvent:event];
+    return view;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    BOOL result = [super pointInside:point withEvent:event];
+    if (self.nextResponseBtn != nil && result) {
+        CGPoint pointResult =  [self convertPoint:point toView:self.nextResponseBtn];
+        BOOL rResult = [self.nextResponseBtn pointInside:pointResult withEvent:event];
+        if (rResult) {
+            [self sendActionsForControlEvents:UIControlEventTouchUpInside];
+            return NO;
+        }
+    }
+    return result;
+}
