@@ -1,0 +1,54 @@
+如果应用中使用了一个三方后导致内存暴增，是你们的原因还是三方的原因，如何确定
+
+
+解决内存泄露的两种方式：
+1.内存泄露排查方法（工具）
+2.内存泄露原因分析（解决方案）
+
+内存泄露（memory leak）：是指申请的内存空间使用完毕之后未回收。一次内存泄露危害忽略，但如果一直泄露，无论多少内存，迟早都会被占用光，最终导致crash。
+（因此，开发中我们要尽量避免内存泄漏的出现）
+内存溢出（ouut of memory）： 是指程序在申请内存时，没有足够的内存空间供其使。
+通俗理解就是内存不够用了，通常在运行大型应用或游戏时，应用或游戏所需要的内存远远超出了你主机内安装的内存所承受大小，就叫内存溢出。最终导致导致机器重启
+或者程序crash。
+
+简单来说：
+内存溢出：供应方（操作系统）能供给需求方（App）的内存越来越少。
+内存溢出：需求方（App）需要的内存过大，超过供应方（操作系统）负载。
+
+一、排查方法
+“iOS开发中有‘ARC机制’帮忙管理内存，但在实际开发中，如果处理来不好堆空间上的内存还是会存在内存泄露的问题。如果内存泄露严重，最终会导致程序的崩溃”
+首先，我们需要检查我们的App有没有内存泄露，并且快速定位到内存泄露的代码。目前比较常用的内存泄漏的排查方法有两种，都在Xcode中可以直接使用：
+第一种：静态分析方法（Analyze）
+第二种：动态分析方法（Instrument 工具库里的Leaks）。一般推荐使用第二种。
+1.1 静态内存泄露分析方法：
+第一步：通过xcode打开项目，然后点击Prooduct->Analyze，开始进入静态内存泄露分析。
+第二步：等待分析结果。
+第三步：根据分析的结果对可能造成内存泄露的代码进行排查。
+“PS：静态内存分析能发现大部分问题，但只是静态分析，并不准确，只是有可能发生内存泄露。一些动态内存分配的情形没有分析。如果需要更精准一些，那就要用到下
+面要介绍的动态内存泄露分析方法（Instruments工具中的Leaks方法）进行排查”。
+
+1.2 动态内存泄露分析方法：
+“静态内存泄露分析不能把所有的内存泄露排查出来，因为有的内存泄露发生在运行时，当用户做某些操作时才发生内存泄露。这时就要使用动态内存泄露检测方法了。”
+
+第一步：通过Xcode打开项目，然后点击Product->Profile。
+第二步：build成功后跳出Instruments工具，选择Leaks选项。
+第三部曲：这时候项目程序在模拟器或手机上运行起来了，选择Leak Checks项，打印内容选择Leaks-> Call Tree-> CallTree，并且右下角
+勾选Invert Call Tree和Hide System Libraries，会发现若干行代码，双击即可跳转到出现内存泄露的地方。
+
+“AFHTTPSessionManager内存泄露是一个很常见的问题：
+产生原因（https://www.jianshu.com/p/922b043b244e）：
+NSURLLSession发现Delegate的修饰符是retain，所以创建的self.session这个变量永远不会被销毁，从而导致AFHTTPSessionManager这个类不会被销毁，
+苹果官方有给出相应解决方案。
+第一种：把该manager封装成单例
+理由：内存中的某一块固定的地址用来存放manager，专门用来网络请求和释放，内存泄泄露解决。
+问题：修改了manager.responseSerializer，因为是单例，下次一个post请求要求返回json格式的这个又要改回去，所以这个要非常注意，不然请求会报错。
+第二种：在网络请求的block内把task取消掉（手动释放finishTasksAndInvalidate或invalidateAndCancel）
+无论是success，还是failure的回调都取消掉，当然在block外需要弱引用下manager对象，然后在两个回调方法里加上
+[weakManager invalidateSessionCancelingTasks: YES];
+”
+
+NSTimer：
+如果你的ViewController中有NSTimer，那么你就要注意了，因为当你调用[NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:
+@selector(updateTime:) userInfo:nil repeats: YES];
+理由：这时target:self，增加了ViewController的retain count，即self强引用timer，timer强引用self，造成循环引用。
+解决方案：在恰当实际调用[timer invalidate]即可
