@@ -1,0 +1,19 @@
+调试过程中如何改变变量值
+
+一、LLLDB常用调试命令
+1.p、po及image命令
+p是打印对象，po是打印对象的description
+p命令修改变量：
+int a = 10;
+NSLog(@"%d", a);       print: 10
+--断点--   1.p a (输出(int) $0 = 10) 2.p $0 = 20
+NSLog(@"%d", a);       print: 20
+
+2.image lookup -a 【地址】  用于寻找栈地址对应的代码位置
+
+二、bt及frame命令
+使用bt命令可以查看函数调用堆栈，然后用frame select命令即可查看对应函数详细
+
+三、breakpoint命令
+
+更多内容：https://www.jianshu.com/p/c91f843a64fc
