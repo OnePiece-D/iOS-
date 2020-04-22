@@ -1,2 +1,41 @@
 5.SDWebImage会开几条线程，图片多长时间过期
+6.SDWebImage的LRU算法是啥
+
+SDWebImageDownloader文件中可知SDWebImage使用NSOperationQueue管理线程池，initConfig中进行downloadQueue初始化，设置
+maxConcurrentOperationCount为6；downloadTimeout设置为15转而NSURLSession的timeoutIntervalForRequest是15；数据读
+取和存入使用信号量加锁dispatch_semaphore_wait/dispatch_semaphore_signal初始设置dispatch_semaphore_create(1)；
+
+SDImageCache中：
+maxCacheAge是图片保存在缓存中的最长时间60(s) * 60 * 24 * 7 一周;
+清理过期图片是在UIApplicationWillTerminateNotification或者UIApplicationDidEnterBackgroundNotification时候；
+当设置了maxCacheSize后，应用从后台激活或者启动后会自动清理图片缓存到maxCacheSize的一半以下
+
+原理：
+1.sd_setImageWithURL:placeholderImage:或sd_setImageWithURL:placeholderImage:options:,先把placeholderImage显示，
+然后SDWebImageManager根据URL处理图片。
+2.进入SDWebImageManger-downlloadWithURL:options:progress:completed,交给SDImageCache从缓存查找图片是否已经下载
+queryDisCacheForKey:done: key是根据图片的url来查找的，也或者可自定义查找key
+3.先从内存图片缓存查找是否有图片,源码:
+UIImage *image = [self imageForMemoryCacheForKey: key];
+if (image) {
+  doneBlock(image, SDImageCacheTypeMemory);
+  return nil;
+}
+如果内存中已经有图片缓存，SDImageCache回调SDWebImageQueryCompletedBlock()到SDWebImageManager。
+4.SDWebImageCompletionBlock回调SDWebImageComplletionWithFinishedBlock到UIImageView+WebCache等前端展示图片。
+5.如果内存缓存中没有，开启异步线程从硬盘查找图片是否已经缓存。根据URLKey在硬盘缓存目录下尝试读取图片文件。 
+如果上一操作从硬盘读取到了图片，将图片添加到内存缓存中（如果空闲内存过小，会先清空内存缓存）。SDImageCache回调SDWebImageQueryCompletedBlock，
+进而回调展示图片。
+“磁盘查找先进行精确文件查找->去掉扩展名的精确文件查找“checking the key with and without the extension”->在自定义目录列表中查找文件”
+6.如果从硬盘缓存目录读取不到图片，说明所有缓存都不存在该图片，需要下载图片，重新生成一个下载器SDWebImageDownloader开始下载图片。
+7.图片下载由NSMutableURLRequest来做，实现相关block来判断图片下载中、下载完成和下载失败。
+8.至于下载后图片如何处理，解码等并未研究，图片解码完成，相关block回调，得到downloadedImage，回调给需要的地方展示图片。将图片保存到SDImageCache
+中，内存缓存和硬盘缓存同事保存。
+9.SDImageCache在初始化的时候会注册一些通知消息，在内存警告或退到后台的时候清理内存图片缓存，应用结束的时候清理过期图片。
+10.缓存大小与清除。
+code： 
+NSInteger size = [[SDImageCache sharedImageCache] getSize];
+[[SDImageCache sharedImageCache] clearDiskOnComplletion: ^{
+  NSLog(@"clear success");
+}];
 
